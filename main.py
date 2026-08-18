@@ -1,8 +1,10 @@
 import io
+import numpy as np
+import cv2
 
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.responses import Response
-from PIL import Image, ImageFilter
+from PIL import Image
 
 app = FastAPI()
 
@@ -83,18 +85,26 @@ async def make_safe_zone(mask: UploadFile = File(...)):
         ).convert("L")
 
         # Convert the source mask to pure black and white.
-        binary_mask = original_mask.point(
-            lambda p: 255 if p >= 128 else 0
-        )
+binary_mask = np.array(original_mask)
+binary_mask = np.where(
+    binary_mask >= 128, 255, 0
+).astype(np.uint8)
 
-        # Shrink the white region inward by approximately 80 pixels.
-        radius = 80
-        kernel_size = (radius * 2) + 1
+# Measure each white pixel's distance from the nearest black pixel.
+distance = cv2.distanceTransform(
+    binary_mask,
+    cv2.DIST_L2,
+    5
+)
 
-        safe_zone = binary_mask.filter(
-            ImageFilter.MinFilter(size=kernel_size)
-        )
+# Keep only pixels at least 80 pixels inside the original boundary.
+radius = 80
 
+safe_array = np.where(
+    distance >= radius, 255, 0
+).astype(np.uint8)
+
+safe_zone = Image.fromarray(safe_array)
         output = io.BytesIO()
         safe_zone.save(output, format="PNG")
 
