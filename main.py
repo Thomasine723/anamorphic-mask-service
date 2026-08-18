@@ -1,7 +1,7 @@
 import io
 
 from fastapi import FastAPI, UploadFile, File, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response
 from PIL import Image
 
 app = FastAPI()
@@ -12,7 +12,15 @@ def health():
     return {"status": "ok"}
 
 
-@app.post("/apply-mask")
+@app.post(
+    "/apply-mask",
+    responses={
+        200: {
+            "content": {"image/png": {}},
+            "description": "Masked PNG image"
+        }
+    }
+)
 async def apply_mask(
     generated_image: UploadFile = File(...),
     mask: UploadFile = File(...)
@@ -42,10 +50,13 @@ async def apply_mask(
         final_image.save(output, format="PNG")
         output.seek(0)
 
-        return StreamingResponse(
-            output,
-            media_type="image/png"
-        )
+        return Response(
+    content=output.getvalue(),
+    media_type="image/png",
+    headers={
+        "Content-Disposition": "attachment; filename=masked-output.png"
+    }
+)
 
     except HTTPException:
         raise
