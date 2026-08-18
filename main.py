@@ -31,16 +31,28 @@ async def apply_mask(
         generated_bytes = await generated_image.read()
         mask_bytes = await mask.read()
 
-        generated = Image.open(io.BytesIO(generated_bytes)).convert("RGB")
-        bw_mask = Image.open(io.BytesIO(mask_bytes)).convert("L")
+        generated = Image.open(
+            io.BytesIO(generated_bytes)
+        ).convert("RGB")
+
+        bw_mask = Image.open(
+            io.BytesIO(mask_bytes)
+        ).convert("L")
 
         if generated.size != bw_mask.size:
             raise HTTPException(
                 status_code=400,
-                detail="Generated image and mask must have identical pixel dimensions."
+                detail=(
+                    "Generated image and mask must have "
+                    "identical pixel dimensions."
+                )
             )
 
-        black_background = Image.new("RGB", generated.size, (0, 0, 0))
+        black_background = Image.new(
+            "RGB",
+            generated.size,
+            (0, 0, 0)
+        )
 
         final_image = Image.composite(
             generated,
@@ -50,23 +62,26 @@ async def apply_mask(
 
         output = io.BytesIO()
         final_image.save(output, format="PNG")
-        output.seek(0)
 
         return Response(
-    content=output.getvalue(),
-    media_type="image/png",
-    headers={
-        "Content-Disposition": "attachment; filename=masked-output.png"
-    }
-)
+            content=output.getvalue(),
+            media_type="image/png",
+            headers={
+                "Content-Disposition":
+                "attachment; filename=masked-output.png"
+            }
+        )
 
     except HTTPException:
         raise
+
     except Exception as error:
         raise HTTPException(
             status_code=400,
             detail=f"Unable to process images: {str(error)}"
         )
+
+
 @app.post(
     "/make-safe-zone",
     responses={
@@ -76,7 +91,9 @@ async def apply_mask(
         }
     }
 )
-async def make_safe_zone(mask: UploadFile = File(...)):
+async def make_safe_zone(
+    mask: UploadFile = File(...)
+):
     try:
         mask_bytes = await mask.read()
 
@@ -84,29 +101,42 @@ async def make_safe_zone(mask: UploadFile = File(...)):
             io.BytesIO(mask_bytes)
         ).convert("L")
 
-        # Convert the source mask to pure black and white.
-binary_mask = np.array(original_mask)
-binary_mask = np.where(
-    binary_mask >= 128, 255, 0
-).astype(np.uint8)
+        # Convert the original mask to pure black and white.
+        binary_mask = np.array(original_mask)
 
-# Measure each white pixel's distance from the nearest black pixel.
-distance = cv2.distanceTransform(
-    binary_mask,
-    cv2.DIST_L2,
-    5
-)
+        binary_mask = np.where(
+            binary_mask >= 128,
+            255,
+            0
+        ).astype(np.uint8)
 
-# Keep only pixels at least 80 pixels inside the original boundary.
-radius = 80
+        # Calculate each white pixel's distance
+        # from the nearest black pixel.
+        distance = cv2.distanceTransform(
+            binary_mask,
+            cv2.DIST_L2,
+            5
+        )
 
-safe_array = np.where(
-    distance >= radius, 255, 0
-).astype(np.uint8)
+        # Hero content should remain at least
+        # 80 pixels inside the original boundary.
+        radius = 80
 
-safe_zone = Image.fromarray(safe_array)
+        safe_array = np.where(
+            distance >= radius,
+            255,
+            0
+        ).astype(np.uint8)
+
+        safe_zone = Image.fromarray(
+            safe_array
+        )
+
         output = io.BytesIO()
-        safe_zone.save(output, format="PNG")
+        safe_zone.save(
+            output,
+            format="PNG"
+        )
 
         return Response(
             content=output.getvalue(),
